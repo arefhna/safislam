@@ -1,4 +1,4 @@
-name: Build Saf Islam APK
+name: Build Saf Islam Release
 
 on:
   workflow_dispatch:
@@ -9,7 +9,7 @@ on:
 
 jobs:
   build:
-    name: Build Android APK
+    name: Build Android Release
     runs-on: ubuntu-latest
 
     steps:
@@ -95,32 +95,47 @@ jobs:
         with:
           gradle-version: '8.9'
 
-      - name: Build with Gradle Wrapper
+      - name: Build Release with Gradle Wrapper
         if: env.USE_WRAPPER == 'true'
         working-directory: ${{ env.PROJECT_DIR }}
         run: |
-          ./gradlew assembleDebug --no-daemon --stacktrace
+          ./gradlew assembleRelease bundleRelease --no-daemon --stacktrace
 
-      - name: Build without Wrapper
+      - name: Build Release without Wrapper
         if: env.USE_WRAPPER == 'false'
         working-directory: ${{ env.PROJECT_DIR }}
         run: |
-          gradle assembleDebug --no-daemon --stacktrace
+          gradle assembleRelease bundleRelease --no-daemon --stacktrace
 
-      - name: Find APK
+      - name: Find Release APK and AAB
         shell: bash
         run: |
-          echo "===== APK FILES ====="
+          echo "===== RELEASE APK ====="
 
           find "$PROJECT_DIR" \
             -type f \
-            -name "*.apk" \
+            -path "*/build/outputs/apk/release/*.apk" \
             -print
 
-      - name: Upload APK
+          echo "===== RELEASE AAB ====="
+
+          find "$PROJECT_DIR" \
+            -type f \
+            -path "*/build/outputs/bundle/release/*.aab" \
+            -print
+
+      - name: Upload Release APK
         uses: actions/upload-artifact@v4
         with:
-          name: Saf-Islam-APK
+          name: Saf-Islam-Release-APK
           path: |
-            ${{ env.PROJECT_DIR }}/**/*.apk
+            ${{ env.PROJECT_DIR }}/**/build/outputs/apk/release/*.apk
+          if-no-files-found: error
+
+      - name: Upload Release AAB
+        uses: actions/upload-artifact@v4
+        with:
+          name: Saf-Islam-Release-AAB
+          path: |
+            ${{ env.PROJECT_DIR }}/**/build/outputs/bundle/release/*.aab
           if-no-files-found: error
