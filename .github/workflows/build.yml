@@ -1,0 +1,141 @@
+name: Build Saf Islam APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - master
+
+jobs:
+  build:
+    name: Build APK
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. Repository-ni yüklə
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # 2. Java 17
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      # 3. ZIP-i aç
+      - name: Extract ZIP
+        shell: bash
+        run: |
+          set -e
+
+          echo "ZIP faylları:"
+          ls -lah
+
+          ZIP_FILE=$(find . -maxdepth 1 -type f -iname "*.zip" | head -n 1)
+
+          if [ -z "$ZIP_FILE" ]; then
+            echo "XƏTA: ZIP faylı tapılmadı!"
+            exit 1
+          fi
+
+          echo "Tapılan ZIP: $ZIP_FILE"
+
+          mkdir -p extracted
+
+          unzip -o "$ZIP_FILE" -d extracted
+
+          echo "ZIP açıldı."
+          echo "Fayllar:"
+          find extracted -maxdepth 4 -type f | head -200
+
+      # 4. Android layihəsinin kökünü avtomatik tap
+      - name: Find Android project
+        shell: bash
+        run: |
+          set -e
+
+          echo "Android layihəsi axtarılır..."
+
+          GRADLEW=$(find "$GITHUB_WORKSPACE/extracted" \
+            -type f \
+            -name "gradlew" \
+            -print -quit)
+
+          if [ -z "$GRADLEW" ]; then
+            echo "XƏTA: ZIP-in içində gradlew tapılmadı!"
+            echo ""
+            echo "ZIP-in bütün strukturu:"
+            find "$GITHUB_WORKSPACE/extracted" -maxdepth 6 -print
+            exit 1
+          fi
+
+          PROJECT_DIR=$(dirname "$GRADLEW")
+
+          echo "gradlew tapıldı:"
+          echo "$GRADLEW"
+
+          echo "Android layihəsinin kökü:"
+          echo "$PROJECT_DIR"
+
+          echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
+
+      # 5. Layihənin əsas fayllarını yoxla
+      - name: Check project
+        shell: bash
+        run: |
+          echo "Layihə qovluğu:"
+          ls -lah "$PROJECT_DIR"
+
+          echo ""
+          echo "settings faylları:"
+          find "$PROJECT_DIR" -maxdepth 2 \
+            \( -name "settings.gradle" -o -name "settings.gradle.kts" \) \
+            -print
+
+          echo ""
+          echo "build.gradle faylları:"
+          find "$PROJECT_DIR" -maxdepth 3 \
+            \( -name "build.gradle" -o -name "build.gradle.kts" \) \
+            -print
+
+          echo ""
+          echo "app qovluğu:"
+          if [ -d "$PROJECT_DIR/app" ]; then
+            ls -lah "$PROJECT_DIR/app"
+          else
+            echo "XƏBƏRDARLIQ: app qovluğu tapılmadı!"
+          fi
+
+      # 6. Gradle executable et
+      - name: Make Gradle executable
+        shell: bash
+        run: |
+          chmod +x "$PROJECT_DIR/gradlew"
+
+      # 7. APK build
+      - name: Build Debug APK
+        shell: bash
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: |
+          ./gradlew assembleDebug --no-daemon --stacktrace
+
+      # 8. APK-ni tap
+      - name: Find APK
+        shell: bash
+        run: |
+          echo "Yaradılmış APK-lər:"
+          find "$PROJECT_DIR" \
+            -type f \
+            -name "*.apk" \
+            -print
+
+      # 9. APK-ni GitHub Actions Artifact kimi saxla
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Saf-Islam-APK
+          path: |
+            ${{ env.PROJECT_DIR }}/**/*.apk
+          if-no-files-found: error
